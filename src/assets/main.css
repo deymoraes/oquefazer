@@ -187,3 +187,22 @@ input:focus, textarea:focus {
 .animate-pulse {
   animation: pulse 1.5s ease-in-out infinite;
 }
+
+/* Ocultar badge e drawer automáticos da Netlify */
+#netlify-badge,
+.netlify-badge,
+[data-netlify-badge],
+[class*="netlify-badge"],
+[id*="netlify-badge"],
+iframe[title*="Netlify" i],
+iframe[src*="netlify" i],
+div[class*="netlify-badge"] {
+  display: none !important;
+  visibility: hidden !important;
+  opacity: 0 !important;
+  pointer-events: none !important;
+  width: 0 !important;
+  height: 0 !important;
+  position: absolute !important;
+  z-index: -9999 !important;
+}

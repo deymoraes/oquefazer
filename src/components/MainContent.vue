@@ -231,6 +231,7 @@ const prioridades = [
   font-weight: 600;
   font-size: 15px;
   box-shadow: 0 4px 20px rgba(59, 130, 246, 0.4);
+  z-index: 100;
 }
 
 .fab:hover {
@@ -241,17 +242,18 @@ const prioridades = [
 @media (max-width: 768px) {
   .main-content {
     padding: var(--space-md);
-    padding-bottom: 120px;
+    padding-bottom: calc(120px + env(safe-area-inset-bottom, 0px));
   }
 
   .fab {
-    bottom: var(--space-md);
+    bottom: calc(var(--space-lg) + env(safe-area-inset-bottom, 0px));
     right: var(--space-md);
     padding: var(--space-md);
     border-radius: 50%;
     width: 56px;
     height: 56px;
     justify-content: center;
+    z-index: 100;
   }
 
   .fab span {
