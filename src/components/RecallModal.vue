@@ -2,8 +2,6 @@
 import { ref, onMounted } from 'vue'
 import { useAppStore } from '@/stores/app'
 import { useNotaStore } from '@/stores/nota'
-import { v4 as uuidv4 } from 'uuid'
-import type { Nota, Lembrete } from '@/types'
 
 const store = useAppStore()
 const notaStore = useNotaStore()
@@ -12,19 +10,22 @@ const texto = ref('')
 const minutosSelecionados = ref(10)
 const gravandoAudio = ref(false)
 const transcription = ref('')
+const salvando = ref(false)
 
 const recognition = ref<SpeechRecognition | null>(null)
 
 onMounted(async () => {
-  // Solicitar permissão de notificação
   if ('Notification' in window && Notification.permission === 'default') {
-    await Notification.requestPermission()
+    try {
+      await Notification.requestPermission()
+    } catch {
+      // Ignorar se bloqueado
+    }
   }
 
-  // Inicializar reconhecimento de voz
   if ('SpeechRecognition' in window || 'webkitSpeechRecognition' in window) {
-    const SpeechRecognition = (window.SpeechRecognition || window.webkitSpeechRecognition)
-    recognition.value = new SpeechRecognition()
+    const SpeechRecognitionCtor = window.SpeechRecognition || window.webkitSpeechRecognition
+    recognition.value = new SpeechRecognitionCtor()
     recognition.value.lang = 'pt-BR'
     recognition.value.continuous = true
     recognition.value.interimResults = true
@@ -52,10 +53,13 @@ onMounted(async () => {
 })
 
 function iniciarGravacao() {
-  if (!recognition.value) return
+  if (!recognition.value) {
+    alert('Seu navegador não suporta reconhecimento de voz')
+    return
+  }
   recognition.value.start()
   gravandoAudio.value = true
-  transcription.value = texto.value
+  transcription.value = texto.value ? texto.value + ' ' : ''
 }
 
 function pararGravacao() {
@@ -71,63 +75,30 @@ async function criarLembreteRapido() {
     return
   }
 
-  // Criar nota temporária
-  const nota: Nota = {
-    id: uuidv4(),
-    categoriaId: store.categoriaAtiva,
-    texto: texto.value,
-    prioridade: 'media',
-    ordem: Date.now(),
-    criadoEm: new Date()
-  }
+  salvando.value = true
+  try {
+    const notaCriada = await store.criarNota(texto.value.trim(), 'media')
+    const dataHora = new Date(Date.now() + minutosSelecionados.value * 60 * 1000)
 
-  // Criar lembrete
-  const dataHora = new Date(Date.now() + minutosSelecionados.value * 60 * 1000)
-  const lembrete: Lembrete = {
-    id: uuidv4(),
-    notaId: nota.id,
-    tipo: 'unico',
-    dataHora,
-    ativo: true
-  }
-
-  nota.lembrar = lembrete
-
-  // Salvar no banco
-  await store.criarNota(nota.texto, nota.prioridade)
-  const notas = await store.notas
-  const notaCriada = notas[notas.length - 1]
-
-  if (notaCriada) {
     await store.definirLembrete(notaCriada.id, {
       tipo: 'unico',
       dataHora,
       ativo: true
     })
 
-    // Agendar notificação
-    agendarNotificacao(notaCriada.id, texto.value, dataHora)
-  }
-
-  notaStore.fecharRecall()
-}
-
-function agendarNotificacao(notaId: string, textoNota: string, dataHora: Date) {
-  const delay = dataHora.getTime() - Date.now()
-  if (delay > 0) {
-    setTimeout(() => {
-      if ('Notification' in window && Notification.permission === 'granted') {
-        new Notification('OQueFazer - Lembrete', {
-          body: textoNota,
-          icon: '/favicon.svg',
-          tag: notaId
-        })
-      }
-    }, delay)
+    notaStore.fecharRecall()
+  } catch (err) {
+    console.error('Erro ao criar lembrete rápido:', err)
+    alert('Não foi possível criar o lembrete. Verifique sua conexão.')
+  } finally {
+    salvando.value = false
   }
 }
 
 function fechar() {
+  if (gravandoAudio.value) {
+    pararGravacao()
+  }
   notaStore.fecharRecall()
 }
 </script>
@@ -160,6 +131,7 @@ function fechar() {
         ></textarea>
 
         <button
+          type="button"
           class="record-btn"
           :class="{ ativo: gravandoAudio }"
           @click="gravandoAudio ? pararGravacao() : iniciarGravacao()"
@@ -176,6 +148,7 @@ function fechar() {
           <button
             v-for="min in [5, 10, 15, 30, 60]"
             :key="min"
+            type="button"
             class="tempo-btn"
             :class="{ ativo: minutosSelecionados === min }"
             @click="minutosSelecionados = min"
@@ -190,9 +163,9 @@ function fechar() {
       </div>
 
       <div class="modal-footer">
-        <button class="btn btn-secondary" @click="fechar">Cancelar</button>
-        <button class="btn btn-primary" @click="criarLembreteRapido">
-          Criar Lembrete
+        <button type="button" class="btn btn-secondary" @click="fechar">Cancelar</button>
+        <button type="button" class="btn btn-primary" :disabled="salvando" @click="criarLembreteRapido">
+          {{ salvando ? 'Salvando...' : 'Criar Lembrete' }}
         </button>
       </div>
     </div>

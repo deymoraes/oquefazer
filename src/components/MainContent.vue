@@ -17,6 +17,11 @@ const prioridades = [
 <template>
   <main class="main-content" @click="store.fecharMenu">
     <div class="content-wrapper">
+      <div v-if="store.erroSincronizacao" class="sync-error-banner">
+        <span>{{ store.erroSincronizacao }}</span>
+        <button class="retry-btn" @click="store.sincronizarAgora()">Tentar novamente</button>
+      </div>
+
       <!-- Notas Ativas -->
       <template v-if="store.viewMode === 'ativas'">
         <div v-if="store.categoriaAtual" class="categoria-header">
@@ -112,6 +117,29 @@ const prioridades = [
 .content-wrapper {
   max-width: 600px;
   margin: 0 auto;
+}
+
+.sync-error-banner {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-sm);
+  padding: var(--space-sm) var(--space-md);
+  margin-bottom: var(--space-md);
+  background: rgba(239, 68, 68, 0.12);
+  border: 1px solid rgba(239, 68, 68, 0.4);
+  border-radius: var(--radius-md);
+  color: var(--accent-max);
+  font-size: 13px;
+}
+
+.retry-btn {
+  padding: 4px 10px;
+  background: var(--accent-max);
+  color: white;
+  border-radius: var(--radius-sm);
+  font-size: 12px;
+  font-weight: 600;
 }
 
 .categoria-header {

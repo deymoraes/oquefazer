@@ -6,6 +6,12 @@ declare module '*.vue' {
   export default component
 }
 
+declare module 'vuedraggable' {
+  import type { DefineComponent } from 'vue'
+  const component: DefineComponent<any, any, any>
+  export default component
+}
+
 interface SpeechRecognitionEvent extends Event {
   results: SpeechRecognitionResultList
   resultIndex: number

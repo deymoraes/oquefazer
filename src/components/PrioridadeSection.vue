@@ -1,9 +1,11 @@
 <script setup lang="ts">
-import { ref } from 'vue'
+import { ref, computed } from 'vue'
+import draggable from 'vuedraggable'
+import { useAppStore } from '@/stores/app'
 import type { Nota, Prioridade } from '@/types'
 import NotaCard from './NotaCard.vue'
 
-const _props = defineProps<{
+const props = defineProps<{
   id: Prioridade
   label: string
   cor: string
@@ -14,7 +16,15 @@ const emit = defineEmits<{
   notaClick: [id: string]
 }>()
 
+const store = useAppStore()
 const colapsado = ref(false)
+
+const listaDraggable = computed({
+  get: () => props.notas,
+  set: (novasNotas: Nota[]) => {
+    store.reordenarNotasPrioridade(props.id, novasNotas)
+  }
+})
 
 function toggleColapsado() {
   colapsado.value = !colapsado.value
@@ -42,18 +52,28 @@ function toggleColapsado() {
     </button>
 
     <div class="section-content" v-show="!colapsado">
+      <draggable
+        v-model="listaDraggable"
+        group="notas-prioridade"
+        item-key="id"
+        class="notas-list"
+        ghost-class="nota-ghost"
+        drag-class="nota-dragging"
+        :animation="150"
+        :delay="120"
+        :delay-on-touch-only="true"
+      >
+        <template #item="{ element }">
+          <NotaCard
+            :nota="element"
+            @click="emit('notaClick', element.id)"
+          />
+        </template>
+      </draggable>
+
       <div v-if="notas.length === 0" class="section-empty">
         Sem tarefas com {{ label.toLowerCase() }}
       </div>
-
-      <TransitionGroup v-else name="nota" tag="div" class="notas-list">
-        <NotaCard
-          v-for="nota in notas"
-          :key="nota.id"
-          :nota="nota"
-          @click="emit('notaClick', nota.id)"
-        />
-      </TransitionGroup>
     </div>
   </section>
 </template>
@@ -125,21 +145,16 @@ function toggleColapsado() {
   display: flex;
   flex-direction: column;
   gap: var(--space-sm);
+  min-height: 8px;
 }
 
-/* Animações */
-.nota-enter-active,
-.nota-leave-active {
-  transition: all 0.2s ease;
+:deep(.nota-ghost) {
+  opacity: 0.4;
+  background: var(--bg-tertiary);
 }
 
-.nota-enter-from,
-.nota-leave-to {
-  opacity: 0;
-  transform: translateY(-10px);
-}
-
-.nota-move {
-  transition: transform 0.3s ease;
+:deep(.nota-dragging) {
+  box-shadow: 0 8px 24px var(--shadow-lg);
+  opacity: 0.95;
 }
 </style>

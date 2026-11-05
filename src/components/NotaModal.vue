@@ -2,13 +2,14 @@
 import { ref, onMounted, computed } from 'vue'
 import { useAppStore } from '@/stores/app'
 import { useNotaStore } from '@/stores/nota'
-import type { Nota, Prioridade, Lembrete } from '@/types'
+import type { Prioridade, Lembrete } from '@/types'
 
 const store = useAppStore()
 const notaStore = useNotaStore()
 
 const texto = ref('')
 const prioridade = ref<Prioridade>('media')
+const categoriaId = ref<string>(store.categoriaAtiva)
 const gravandoAudio = ref(false)
 const transcription = ref('')
 const mostraLembrete = ref(false)
@@ -16,29 +17,47 @@ const tipoLembrete = ref<'rapido' | 'unico' | 'recorrente'>('rapido')
 const minutosLembrete = ref(10)
 const dataHoraLembrete = ref('')
 const recorrenciaTipo = ref<'diario' | 'semanal'>('diario')
+const salvando = ref(false)
 
-const _mediaRecorder = ref<MediaRecorder | null>(null)
-const _audioChunks = ref<Blob[]>([])
 const recognition = ref<SpeechRecognition | null>(null)
 
-// Carregar nota existente se estiver editando
+function formatarParaInputDatetimeLocal(data: Date): string {
+  const d = new Date(data)
+  if (isNaN(d.getTime())) return ''
+  const pad = (n: number) => String(n).padStart(2, '0')
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`
+}
+
 onMounted(() => {
+  categoriaId.value = store.categoriaAtiva
+
   if (notaStore.notaEditando) {
     const nota = store.notas.find(n => n.id === notaStore.notaEditando)
     if (nota) {
       texto.value = nota.texto
       prioridade.value = nota.prioridade
-      if (nota.lembrar) {
+      categoriaId.value = nota.categoriaId
+      if (nota.lembrar?.ativo) {
         mostraLembrete.value = true
-        tipoLembrete.value = nota.lembrar.tipo === 'recorrente' ? 'recorrente' : 'unico'
+        dataHoraLembrete.value = formatarParaInputDatetimeLocal(nota.lembrar.dataHora)
+        if (nota.lembrar.tipo === 'recorrente') {
+          tipoLembrete.value = 'recorrente'
+          if (nota.lembrar.recorrencia?.tipo === 'semanal') {
+            recorrenciaTipo.value = 'semanal'
+          } else {
+            recorrenciaTipo.value = 'diario'
+          }
+        } else {
+          tipoLembrete.value = 'unico'
+        }
       }
     }
   }
 
   // Inicializar reconhecimento de voz
   if ('SpeechRecognition' in window || 'webkitSpeechRecognition' in window) {
-    const SpeechRecognition = (window.SpeechRecognition || window.webkitSpeechRecognition)
-    recognition.value = new SpeechRecognition()
+    const SpeechRecognitionCtor = window.SpeechRecognition || window.webkitSpeechRecognition
+    recognition.value = new SpeechRecognitionCtor()
     recognition.value.lang = 'pt-BR'
     recognition.value.continuous = true
     recognition.value.interimResults = true
@@ -71,6 +90,17 @@ const notaEditando = computed(() => {
   return store.notas.find(n => n.id === notaStore.notaEditando)
 })
 
+async function toggleLembrete() {
+  mostraLembrete.value = !mostraLembrete.value
+  if (mostraLembrete.value && 'Notification' in window && Notification.permission === 'default') {
+    try {
+      await Notification.requestPermission()
+    } catch {
+      // Ignorar caso o navegador bloqueie
+    }
+  }
+}
+
 function iniciarGravacao() {
   if (!recognition.value) {
     alert('Seu navegador não suporta reconhecimento de voz')
@@ -79,7 +109,7 @@ function iniciarGravacao() {
 
   recognition.value.start()
   gravandoAudio.value = true
-  transcription.value = texto.value
+  transcription.value = texto.value ? texto.value + ' ' : ''
 }
 
 function pararGravacao() {
@@ -95,23 +125,39 @@ async function salvar() {
     return
   }
 
-  if (notaStore.notaEditando) {
-    // Atualizar nota existente
-    await store.atualizarNota(notaStore.notaEditando, {
-      texto: texto.value,
-      prioridade: prioridade.value
-    })
-  } else {
-    // Criar nova nota
-    const nota = await store.criarNota(texto.value, prioridade.value)
+  salvando.value = true
+  try {
+    if (notaStore.notaEditando) {
+      const id = notaStore.notaEditando
+      await store.atualizarNota(id, {
+        texto: texto.value,
+        prioridade: prioridade.value,
+        categoriaId: categoriaId.value
+      })
 
-    // Adicionar lembrete se configurado
-    if (mostraLembrete.value) {
-      await configurarLembrete(nota.id)
+      if (mostraLembrete.value) {
+        await configurarLembrete(id)
+      } else if (notaEditando.value?.lembrar) {
+        await store.removerLembrete(id)
+      }
+    } else {
+      if (categoriaId.value && categoriaId.value !== store.categoriaAtiva) {
+        store.selecionarCategoria(categoriaId.value)
+      }
+      const nota = await store.criarNota(texto.value, prioridade.value)
+
+      if (mostraLembrete.value) {
+        await configurarLembrete(nota.id)
+      }
     }
-  }
 
-  notaStore.fecharModal()
+    notaStore.fecharModal()
+  } catch (err) {
+    console.error('Erro ao salvar tarefa:', err)
+    alert('Erro ao salvar tarefa na nuvem. Verifique sua conexão.')
+  } finally {
+    salvando.value = false
+  }
 }
 
 async function configurarLembrete(notaId: string) {
@@ -119,10 +165,10 @@ async function configurarLembrete(notaId: string) {
 
   if (tipoLembrete.value === 'rapido') {
     dataHora = new Date(Date.now() + minutosLembrete.value * 60 * 1000)
-  } else if (tipoLembrete.value === 'unico' && dataHoraLembrete.value) {
+  } else if (dataHoraLembrete.value) {
     dataHora = new Date(dataHoraLembrete.value)
   } else {
-    dataHora = new Date(Date.now() + 60 * 60 * 1000) // Padrão: 1 hora
+    dataHora = new Date(Date.now() + minutosLembrete.value * 60 * 1000)
   }
 
   const lembrete: Omit<Lembrete, 'id' | 'notaId'> = {
@@ -135,29 +181,6 @@ async function configurarLembrete(notaId: string) {
   }
 
   await store.definirLembrete(notaId, lembrete)
-  agendarNotificacao(notaId, lembrete.dataHora)
-}
-
-function agendarNotificacao(notaId: string, dataHora: Date) {
-  const delay = dataHora.getTime() - Date.now()
-  if (delay > 0) {
-    setTimeout(async () => {
-      const nota = store.notas.find(n => n.id === notaId)
-      if (nota && !nota.concluidoEm) {
-        await mostrarNotificacao(nota)
-      }
-    }, delay)
-  }
-}
-
-async function mostrarNotificacao(nota: Nota) {
-  if ('Notification' in window && Notification.permission === 'granted') {
-    new Notification('OQueFazer - Lembrete', {
-      body: nota.texto,
-      icon: '/favicon.svg',
-      tag: nota.id
-    })
-  }
 }
 
 async function excluir() {
@@ -168,6 +191,9 @@ async function excluir() {
 }
 
 function fechar() {
+  if (gravandoAudio.value) {
+    pararGravacao()
+  }
   notaStore.fecharModal()
 }
 </script>
@@ -196,6 +222,7 @@ function fechar() {
           ></textarea>
 
           <button
+            type="button"
             class="record-btn"
             :class="{ ativo: gravandoAudio }"
             @click="gravandoAudio ? pararGravacao() : iniciarGravacao()"
@@ -212,6 +239,24 @@ function fechar() {
           </button>
         </div>
 
+        <!-- Categoria -->
+        <div v-if="store.categoriasOrdenadas.length > 1" class="categoria-group">
+          <label class="label">Categoria</label>
+          <div class="categoria-opcoes">
+            <button
+              v-for="cat in store.categoriasOrdenadas"
+              :key="cat.id"
+              type="button"
+              class="categoria-pill"
+              :class="{ ativo: categoriaId === cat.id }"
+              @click="categoriaId = cat.id"
+            >
+              <span class="cat-dot" :style="{ background: cat.cor || 'var(--accent-action)' }"></span>
+              {{ cat.nome }}
+            </button>
+          </div>
+        </div>
+
         <!-- Prioridade -->
         <div class="prioridade-group">
           <label class="label">Prioridade</label>
@@ -219,6 +264,7 @@ function fechar() {
             <button
               v-for="p in (['maxima', 'media', 'minima'] as const)"
               :key="p"
+              type="button"
               class="prioridade-btn"
               :class="{ ativo: prioridade === p }"
               @click="prioridade = p"
@@ -239,9 +285,10 @@ function fechar() {
         <!-- Lembrete -->
         <div class="lembrete-group">
           <button
+            type="button"
             class="lembrete-toggle"
             :class="{ ativo: mostraLembrete }"
-            @click="mostraLembrete = !mostraLembrete"
+            @click="toggleLembrete"
           >
             <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
               <circle cx="12" cy="12" r="10" />
@@ -267,9 +314,10 @@ function fechar() {
               <button
                 v-for="min in [5, 10, 15, 30, 60]"
                 :key="min"
+                type="button"
                 class="tempo-btn"
                 :class="{ ativo: tipoLembrete === 'rapido' && minutosLembrete === min }"
-                @click="tipoLembrete = 'rapido'; minutosLembrete = min"
+                @click="tipoLembrete = 'rapido'; minutosLembrete = min; dataHoraLembrete = ''"
               >
                 {{ min }}min
               </button>
@@ -280,15 +328,17 @@ function fechar() {
               <input
                 type="datetime-local"
                 v-model="dataHoraLembrete"
+                @input="tipoLembrete = tipoLembrete === 'recorrente' ? 'recorrente' : 'unico'"
                 class="datetime-input"
               />
             </div>
 
             <div class="lembrete-recorrencia">
               <button
+                type="button"
                 class="recorrencia-toggle"
                 :class="{ ativo: tipoLembrete === 'recorrente' }"
-                @click="tipoLembrete = tipoLembrete === 'recorrente' ? 'rapido' : 'recorrente'"
+                @click="tipoLembrete = tipoLembrete === 'recorrente' ? (dataHoraLembrete ? 'unico' : 'rapido') : 'recorrente'"
               >
                 <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                   <polyline points="23 4 23 10 17 10" />
@@ -300,6 +350,7 @@ function fechar() {
 
               <div v-if="tipoLembrete === 'recorrente'" class="recorrencia-opcoes">
                 <button
+                  type="button"
                   class="recorrencia-btn"
                   :class="{ ativo: recorrenciaTipo === 'diario' }"
                   @click="recorrenciaTipo = 'diario'"
@@ -307,6 +358,7 @@ function fechar() {
                   Diário
                 </button>
                 <button
+                  type="button"
                   class="recorrencia-btn"
                   :class="{ ativo: recorrenciaTipo === 'semanal' }"
                   @click="recorrenciaTipo = 'semanal'"
@@ -320,13 +372,13 @@ function fechar() {
       </div>
 
       <div class="modal-footer">
-        <button v-if="notaEditando" class="btn btn-danger" @click="excluir">
+        <button v-if="notaEditando" type="button" class="btn btn-danger" @click="excluir">
           Excluir
         </button>
         <div class="footer-right">
-          <button class="btn btn-secondary" @click="fechar">Cancelar</button>
-          <button class="btn btn-primary" @click="salvar">
-            {{ notaEditando ? 'Salvar' : 'Criar' }}
+          <button type="button" class="btn btn-secondary" @click="fechar">Cancelar</button>
+          <button type="button" class="btn btn-primary" :disabled="salvando" @click="salvar">
+            {{ salvando ? 'Salvando...' : (notaEditando ? 'Salvar' : 'Criar') }}
           </button>
         </div>
       </div>
@@ -453,6 +505,41 @@ function fechar() {
   margin-bottom: var(--space-sm);
 }
 
+.categoria-opcoes {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-sm);
+}
+
+.categoria-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 12px;
+  background: var(--bg-tertiary);
+  border: 1px solid transparent;
+  border-radius: var(--radius-md);
+  color: var(--text-secondary);
+  font-size: 13px;
+  font-weight: 500;
+}
+
+.categoria-pill:hover {
+  background: var(--bg-primary);
+}
+
+.categoria-pill.ativo {
+  background: var(--bg-primary);
+  color: var(--text-primary);
+  border-color: var(--border);
+}
+
+.cat-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 2px;
+}
+
 .prioridade-opcoes {
   display: flex;
   gap: var(--space-sm);
@@ -466,6 +553,7 @@ function fechar() {
   gap: var(--space-sm);
   padding: var(--space-sm) var(--space-md);
   background: var(--bg-tertiary);
+  border: 1px solid transparent;
   border-radius: var(--radius-md);
   color: var(--text-secondary);
   font-size: 13px;
@@ -479,7 +567,7 @@ function fechar() {
 .prioridade-btn.ativo {
   background: var(--bg-primary);
   color: var(--text-primary);
-  border: 1px solid var(--border);
+  border-color: var(--border);
 }
 
 .prioridade-dot {

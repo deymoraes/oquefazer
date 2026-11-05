@@ -20,9 +20,20 @@ function getCorPrioridade(prioridade: string): string {
 
 function formatarData(data: Date): string {
   const d = new Date(data)
+  if (isNaN(d.getTime())) return ''
   return d.toLocaleDateString('pt-BR', {
     day: '2-digit',
     month: 'short'
+  })
+}
+
+function formatarHorarioLembrete(data?: Date): string {
+  if (!data) return 'Lembrete ativo'
+  const d = new Date(data)
+  if (isNaN(d.getTime())) return 'Lembrete ativo'
+  return d.toLocaleTimeString('pt-BR', {
+    hour: '2-digit',
+    minute: '2-digit'
   })
 }
 
@@ -61,7 +72,7 @@ async function toggleConcluir(event: Event) {
             <circle cx="12" cy="12" r="10" />
             <polyline points="12 6 12 12 16 14" />
           </svg>
-          Lembrete ativo
+          {{ formatarHorarioLembrete(nota.lembrar.dataHora) }}
         </span>
         <span v-if="nota.audioBlob" class="meta-badge audio">
           <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
@@ -76,7 +87,7 @@ async function toggleConcluir(event: Event) {
       </div>
     </div>
 
-    <button class="nota-opcoes" aria-label="Opções da nota">
+    <button class="nota-opcoes" aria-label="Editar tarefa">
       <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
         <circle cx="12" cy="5" r="2" />
         <circle cx="12" cy="12" r="2" />
@@ -147,6 +158,10 @@ async function toggleConcluir(event: Event) {
   line-height: 1.4;
   color: var(--text-primary);
   word-wrap: break-word;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
 }
 
 .nota-card.concluida .nota-texto {

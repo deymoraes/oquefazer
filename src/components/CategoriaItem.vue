@@ -1,12 +1,13 @@
 <script setup lang="ts">
 import type { Categoria } from '@/types'
 
-const _props = defineProps<{
+defineProps<{
   categoria: Categoria
   ativa: boolean
 }>()
 
 const emit = defineEmits<{
+  selecionar: []
   editar: []
 }>()
 </script>
@@ -15,14 +16,19 @@ const emit = defineEmits<{
   <div
     class="categoria-item"
     :class="{ ativa }"
-    @click="emit('editar')"
+    @click="emit('selecionar')"
   >
     <span
       class="categoria-icone"
       :style="{ background: categoria.cor || 'var(--accent-action)' }"
     ></span>
     <span class="categoria-nome">{{ categoria.nome }}</span>
-    <button class="menu-btn" @click.stop="emit('editar')" aria-label="Opções">
+    <button
+      class="menu-btn"
+      @click.stop="emit('editar')"
+      aria-label="Editar categoria"
+      title="Editar categoria"
+    >
       <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
         <circle cx="12" cy="5" r="2" />
         <circle cx="12" cy="12" r="2" />
@@ -78,7 +84,8 @@ const emit = defineEmits<{
   transition: opacity 0.15s ease;
 }
 
-.categoria-item:hover .menu-btn {
+.categoria-item:hover .menu-btn,
+.categoria-item.ativa .menu-btn {
   opacity: 1;
 }
 

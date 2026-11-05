@@ -1,15 +1,27 @@
 <script setup lang="ts">
 import { ref } from 'vue'
 import { useAppStore } from '@/stores/app'
+import type { Categoria } from '@/types'
 import CategoriaItem from './CategoriaItem.vue'
 import NovaCategoriaModal from './NovaCategoriaModal.vue'
 
 const store = useAppStore()
-const mostrarNovaCategoria = ref(false)
+const mostrarModalCategoria = ref(false)
+const categoriaEditando = ref<Categoria | null>(null)
 
-function editarCategoria(categoria: any) {
-  // Implementar edição
-  console.log('Editar:', categoria)
+function abrirNovaCategoria() {
+  categoriaEditando.value = null
+  mostrarModalCategoria.value = true
+}
+
+function editarCategoria(categoria: Categoria) {
+  categoriaEditando.value = categoria
+  mostrarModalCategoria.value = true
+}
+
+function fecharModalCategoria() {
+  mostrarModalCategoria.value = false
+  categoriaEditando.value = null
 }
 </script>
 
@@ -17,7 +29,7 @@ function editarCategoria(categoria: any) {
   <aside class="menu" @click.stop>
     <div class="menu-header">
       <span class="menu-title">Categorias</span>
-      <button class="add-btn" @click="mostrarNovaCategoria = true" aria-label="Nova categoria">
+      <button class="add-btn" @click="abrirNovaCategoria" aria-label="Nova categoria">
         <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
           <line x1="12" y1="5" x2="12" y2="19" />
           <line x1="5" y1="12" x2="19" y2="12" />
@@ -32,7 +44,7 @@ function editarCategoria(categoria: any) {
           :key="categoria.id"
           :categoria="categoria"
           :ativa="store.categoriaAtiva === categoria.id && store.viewMode === 'ativas'"
-          @click="store.selecionarCategoria(categoria.id)"
+          @selecionar="store.selecionarCategoria(categoria.id)"
           @editar="editarCategoria(categoria)"
         />
       </div>
@@ -55,9 +67,21 @@ function editarCategoria(categoria: any) {
       </button>
     </div>
 
+    <div class="menu-footer">
+      <button class="menu-item logout-btn" @click="store.logout()">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4" />
+          <polyline points="16 17 21 12 16 7" />
+          <line x1="21" y1="12" x2="9" y2="12" />
+        </svg>
+        <span>Sair da conta</span>
+      </button>
+    </div>
+
     <NovaCategoriaModal
-      v-if="mostrarNovaCategoria"
-      @fechar="mostrarNovaCategoria = false"
+      v-if="mostrarModalCategoria"
+      :categoria="categoriaEditando"
+      @fechar="fecharModalCategoria"
     />
   </aside>
 </template>
@@ -161,6 +185,21 @@ function editarCategoria(categoria: any) {
 
 .concluidas svg {
   color: var(--accent-min);
+}
+
+.menu-footer {
+  padding: var(--space-sm);
+  border-top: 1px solid var(--border);
+}
+
+.logout-btn {
+  font-size: 13px;
+  color: var(--text-muted);
+}
+
+.logout-btn:hover {
+  color: var(--accent-max);
+  background: rgba(239, 68, 68, 0.08);
 }
 
 @media (max-width: 768px) {

@@ -1,27 +1,29 @@
 <script setup lang="ts">
 import { onMounted } from 'vue'
 import { useAppStore } from '@/stores/app'
+import { useNotaStore } from '@/stores/nota'
 import Header from '@/components/Header.vue'
 import MenuLateral from '@/components/MenuLateral.vue'
 import MainContent from '@/components/MainContent.vue'
 import NotaModal from '@/components/NotaModal.vue'
 import RecallModal from '@/components/RecallModal.vue'
-import { useNotaStore } from '@/stores/nota'
+import LoginView from '@/components/LoginView.vue'
+import NotificacaoToast from '@/components/NotificacaoToast.vue'
 
 const store = useAppStore()
 const notaStore = useNotaStore()
 
 onMounted(async () => {
-  await store.inicializar()
-  // Registrar service worker
-  if ('serviceWorker' in navigator) {
-    navigator.serviceWorker.register('/sw.js').catch(console.error)
+  if (store.autenticado) {
+    await store.inicializar()
   }
 })
 </script>
 
 <template>
-  <div class="app">
+  <LoginView v-if="!store.autenticado" />
+
+  <div v-else class="app">
     <Header @abrir-recall="notaStore.abrirRecall()" />
 
     <div class="app-body">
@@ -31,6 +33,7 @@ onMounted(async () => {
 
     <NotaModal v-if="notaStore.modalAberto" />
     <RecallModal v-if="notaStore.recallAberto" />
+    <NotificacaoToast />
   </div>
 </template>
 

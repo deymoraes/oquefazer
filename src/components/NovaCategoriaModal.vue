@@ -1,6 +1,11 @@
 <script setup lang="ts">
-import { ref } from 'vue'
+import { ref, onMounted } from 'vue'
 import { useAppStore } from '@/stores/app'
+import type { Categoria } from '@/types'
+
+const props = defineProps<{
+  categoria?: Categoria | null
+}>()
 
 const emit = defineEmits<{
   fechar: []
@@ -22,13 +27,36 @@ const cores = [
   '#F97316'  // laranja
 ]
 
-async function criar() {
+onMounted(() => {
+  if (props.categoria) {
+    nome.value = props.categoria.nome
+    corSelecionada.value = props.categoria.cor || '#3B82F6'
+  }
+})
+
+async function salvar() {
   if (!nome.value.trim()) {
     return
   }
 
-  await store.criarCategoria(nome.value.trim(), corSelecionada.value)
+  if (props.categoria) {
+    await store.atualizarCategoria(props.categoria.id, {
+      nome: nome.value.trim(),
+      cor: corSelecionada.value
+    })
+  } else {
+    const nova = await store.criarCategoria(nome.value.trim(), corSelecionada.value)
+    store.selecionarCategoria(nova.id)
+  }
   emit('fechar')
+}
+
+async function excluir() {
+  if (!props.categoria || props.categoria.isDefault) return
+  if (confirm(`Deseja realmente excluir a categoria "${props.categoria.nome}" e suas tarefas?`)) {
+    await store.excluirCategoria(props.categoria.id)
+    emit('fechar')
+  }
 }
 </script>
 
@@ -36,7 +64,7 @@ async function criar() {
   <div class="modal-overlay" @click.self="emit('fechar')">
     <div class="modal">
       <div class="modal-header">
-        <h2>Nova Categoria</h2>
+        <h2>{{ categoria ? 'Editar Categoria' : 'Nova Categoria' }}</h2>
         <button class="close-btn" @click="emit('fechar')" aria-label="Fechar">
           <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
             <line x1="18" y1="6" x2="6" y2="18" />
@@ -54,6 +82,7 @@ async function criar() {
             placeholder="Ex: Estudos, Projeto X..."
             maxlength="30"
             autofocus
+            @keyup.enter="salvar"
           />
         </div>
 
@@ -83,8 +112,19 @@ async function criar() {
       </div>
 
       <div class="modal-footer">
-        <button class="btn btn-secondary" @click="emit('fechar')">Cancelar</button>
-        <button class="btn btn-primary" @click="criar">Criar</button>
+        <button
+          v-if="categoria && !categoria.isDefault"
+          class="btn btn-danger"
+          @click="excluir"
+        >
+          Excluir
+        </button>
+        <div class="footer-right">
+          <button class="btn btn-secondary" @click="emit('fechar')">Cancelar</button>
+          <button class="btn btn-primary" @click="salvar">
+            {{ categoria ? 'Salvar' : 'Criar' }}
+          </button>
+        </div>
       </div>
     </div>
   </div>
@@ -204,10 +244,17 @@ async function criar() {
 
 .modal-footer {
   display: flex;
-  justify-content: flex-end;
+  align-items: center;
+  justify-content: space-between;
   gap: var(--space-sm);
   padding: var(--space-lg);
   border-top: 1px solid var(--border);
+}
+
+.footer-right {
+  display: flex;
+  gap: var(--space-sm);
+  margin-left: auto;
 }
 
 .btn {
@@ -234,6 +281,17 @@ async function criar() {
 .btn-secondary:hover {
   background: var(--bg-primary);
   color: var(--text-primary);
+}
+
+.btn-danger {
+  background: transparent;
+  color: var(--accent-max);
+  padding-left: var(--space-sm);
+  padding-right: var(--space-sm);
+}
+
+.btn-danger:hover {
+  background: rgba(239, 68, 68, 0.1);
 }
 
 @keyframes fadeIn {

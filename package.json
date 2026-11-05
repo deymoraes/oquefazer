@@ -9,18 +9,19 @@
     "preview": "vite preview"
   },
   "dependencies": {
-    "vue": "^3.4.21",
-    "pinia": "^2.1.7",
+    "@supabase/supabase-js": "^2.119.0",
     "dexie": "^3.2.4",
-    "vuedraggable": "^4.1.0",
-    "uuid": "^9.0.0"
+    "pinia": "^2.1.7",
+    "uuid": "^9.0.0",
+    "vue": "^3.4.21",
+    "vuedraggable": "^4.1.0"
   },
   "devDependencies": {
+    "@types/uuid": "^9.0.8",
     "@vitejs/plugin-vue": "^5.0.4",
     "typescript": "^5.4.2",
     "vite": "^5.1.6",
     "vite-plugin-pwa": "^0.19.2",
-    "vue-tsc": "^2.0.6",
-    "@types/uuid": "^9.0.8"
+    "vue-tsc": "^2.0.6"
   }
 }

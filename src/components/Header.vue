@@ -8,7 +8,7 @@ const emit = defineEmits<{
 </script>
 
 <template>
-  <header class="header">
+  <header class="header" :class="{ 'has-lembretes': store.contadorLembretes > 0 }">
     <div class="header-left">
       <button class="menu-btn" @click="store.toggleMenu" aria-label="Abrir menu">
         <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
@@ -28,6 +28,20 @@ const emit = defineEmits<{
 
     <div class="header-right">
       <button
+        class="sync-btn"
+        :class="{ girando: store.sincronizando }"
+        @click="store.sincronizarAgora()"
+        :title="store.sincronizando ? 'Sincronizando...' : 'Sincronizar agora'"
+        aria-label="Sincronizar tarefas"
+      >
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <polyline points="23 4 23 10 17 10" />
+          <polyline points="1 20 1 14 7 14" />
+          <path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15" />
+        </svg>
+      </button>
+
+      <button
         class="recall-btn"
         @click="emit('abrirRecall')"
         aria-label="Modo lembrete rápido"
@@ -37,6 +51,9 @@ const emit = defineEmits<{
           <path d="M13.73 21a2 2 0 0 1-3.46 0" />
         </svg>
         <span class="recall-label">Lembrar</span>
+        <span v-if="store.contadorLembretes > 0" class="recall-badge">
+          {{ store.contadorLembretes }}
+        </span>
       </button>
     </div>
   </header>
@@ -52,6 +69,10 @@ const emit = defineEmits<{
   border-bottom: 1px solid var(--border);
   height: 60px;
   flex-shrink: 0;
+}
+
+.header.has-lembretes {
+  border-bottom-color: rgba(168, 85, 247, 0.5);
 }
 
 .header-left {
@@ -108,6 +129,34 @@ const emit = defineEmits<{
   gap: var(--space-sm);
 }
 
+.sync-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  height: 36px;
+  border-radius: var(--radius-md);
+  color: var(--text-secondary);
+}
+
+.sync-btn:hover {
+  background: var(--bg-secondary);
+  color: var(--text-primary);
+}
+
+.sync-btn.girando svg {
+  animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(360deg);
+  }
+}
+
 .recall-btn {
   display: flex;
   align-items: center;
@@ -130,6 +179,15 @@ const emit = defineEmits<{
 
 .recall-label {
   font-size: 14px;
+}
+
+.recall-badge {
+  font-size: 11px;
+  font-weight: 600;
+  background: var(--accent-recall);
+  color: white;
+  padding: 1px 6px;
+  border-radius: 10px;
 }
 
 @media (max-width: 480px) {
