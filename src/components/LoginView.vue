@@ -20,7 +20,7 @@ async function handleSubmit() {
 
   entrando.value = true
   try {
-    const sucesso = store.login(email.value, senha.value)
+    const sucesso = await store.login(email.value, senha.value)
     if (!sucesso) {
       erro.value = 'E-mail ou senha incorretos.'
     }

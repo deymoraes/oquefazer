@@ -155,12 +155,12 @@ export const useAppStore = defineStore('app', () => {
   }
 
   // Autenticação
-  function login(email: string, senha: string): boolean {
+  async function login(email: string, senha: string): Promise<boolean> {
     const emailLimpo = email.trim().toLowerCase()
     if (emailLimpo === EMAIL_AUTORIZADO.toLowerCase() && senha === SENHA_AUTORIZADA) {
       autenticado.value = true
       localStorage.setItem(AUTH_STORAGE_KEY, 'true')
-      inicializar()
+      await inicializar()
       return true
     }
     return false
@@ -343,7 +343,11 @@ export const useAppStore = defineStore('app', () => {
   }
 
   // Operações de Notas
-  async function criarNota(texto: string, prioridade: Prioridade = 'media'): Promise<Nota> {
+  async function criarNota(
+    texto: string,
+    prioridade: Prioridade = 'media',
+    categoriaIdParam?: string
+  ): Promise<Nota> {
     if (categorias.value.length === 0) {
       await carregarCategorias()
       await inicializarCategoriasPadrao()
@@ -351,13 +355,22 @@ export const useAppStore = defineStore('app', () => {
     garantirCategoriaAtivaValida()
 
     const id = uuidv4()
-    const categoriaId = categoriaAtiva.value
+    const categoriaId = (categoriaIdParam && categorias.value.some(c => c.id === categoriaIdParam))
+      ? categoriaIdParam
+      : (categoriaAtiva.value || categorias.value[0]?.id || '')
+
+    const notasDaPrioridade = notas.value.filter(n => n.prioridade === prioridade)
+    const maxOrdem = notasDaPrioridade.length > 0
+      ? Math.max(0, ...notasDaPrioridade.map(n => (typeof n.ordem === 'number' && !isNaN(n.ordem)) ? n.ordem : 0))
+      : 0
+    const ordem = maxOrdem + 1
+
     const nota: Nota = {
       id,
       categoriaId,
       texto: texto.trim(),
       prioridade,
-      ordem: Date.now(),
+      ordem,
       criadoEm: new Date()
     }
 
@@ -416,11 +429,10 @@ export const useAppStore = defineStore('app', () => {
   }
 
   async function reordenarNotasPrioridade(prioridade: Prioridade, novasNotasOrdenadas: Nota[]) {
-    const baseOrdem = Date.now()
     const promessas: Promise<any>[] = []
 
     novasNotasOrdenadas.forEach((nota, idx) => {
-      const novaOrdem = baseOrdem + idx
+      const novaOrdem = idx
       const mudouPrioridade = nota.prioridade !== prioridade
       const indexGlobal = notas.value.findIndex(n => n.id === nota.id)
 
@@ -548,9 +560,9 @@ export const useAppStore = defineStore('app', () => {
 
   // Lembretes e Notificações
   async function definirLembrete(notaId: string, lembrete: Omit<Lembrete, 'id' | 'notaId'>) {
-    const dataIso = lembrete.dataHora instanceof Date
-      ? lembrete.dataHora.toISOString()
-      : new Date(lembrete.dataHora).toISOString()
+    const rawDate = lembrete.dataHora instanceof Date ? lembrete.dataHora : new Date(lembrete.dataHora)
+    const validDate = isNaN(rawDate.getTime()) ? new Date(Date.now() + 60 * 60 * 1000) : rawDate
+    const dataIso = validDate.toISOString()
 
     const updateData: any = {
       lembrar_ativo: true,
@@ -564,23 +576,26 @@ export const useAppStore = defineStore('app', () => {
       .update(updateData)
       .eq('id', notaId)
 
-    if (!error) {
-      const index = notas.value.findIndex(n => n.id === notaId)
-      if (index !== -1) {
-        const notaAtualizada: Nota = {
-          ...notas.value[index],
-          lembrar: {
-            ...lembrete,
-            dataHora: new Date(dataIso),
-            id: notaId,
-            notaId,
-            ativo: true
-          }
+    if (error) {
+      console.error('Erro ao definir lembrete:', error)
+      throw error
+    }
+
+    const index = notas.value.findIndex(n => n.id === notaId)
+    if (index !== -1) {
+      const notaAtualizada: Nota = {
+        ...notas.value[index],
+        lembrar: {
+          ...lembrete,
+          dataHora: validDate,
+          id: notaId,
+          notaId,
+          ativo: true
         }
-        notas.value[index] = notaAtualizada
-        agendarTimerLembrete(notaAtualizada)
-        salvarCacheLocal()
       }
+      notas.value[index] = notaAtualizada
+      agendarTimerLembrete(notaAtualizada)
+      salvarCacheLocal()
     }
   }
 

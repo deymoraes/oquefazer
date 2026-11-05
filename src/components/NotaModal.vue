@@ -9,7 +9,7 @@ const notaStore = useNotaStore()
 
 const texto = ref('')
 const prioridade = ref<Prioridade>('media')
-const categoriaId = ref<string>(store.categoriaAtiva)
+const categoriaId = ref<string>(store.categoriaAtiva || store.categoriasOrdenadas[0]?.id || '')
 const gravandoAudio = ref(false)
 const transcription = ref('')
 const mostraLembrete = ref(false)
@@ -29,7 +29,7 @@ function formatarParaInputDatetimeLocal(data: Date): string {
 }
 
 onMounted(() => {
-  categoriaId.value = store.categoriaAtiva
+  categoriaId.value = store.categoriaAtiva || store.categoriasOrdenadas[0]?.id || ''
 
   if (notaStore.notaEditando) {
     const nota = store.notas.find(n => n.id === notaStore.notaEditando)
@@ -141,10 +141,11 @@ async function salvar() {
         await store.removerLembrete(id)
       }
     } else {
-      if (categoriaId.value && categoriaId.value !== store.categoriaAtiva) {
-        store.selecionarCategoria(categoriaId.value)
+      const catEscolhida = categoriaId.value || store.categoriaAtiva || store.categoriasOrdenadas[0]?.id || ''
+      if (catEscolhida && catEscolhida !== store.categoriaAtiva) {
+        store.selecionarCategoria(catEscolhida)
       }
-      const nota = await store.criarNota(texto.value, prioridade.value)
+      const nota = await store.criarNota(texto.value, prioridade.value, catEscolhida)
 
       if (mostraLembrete.value) {
         await configurarLembrete(nota.id)
@@ -152,9 +153,10 @@ async function salvar() {
     }
 
     notaStore.fecharModal()
-  } catch (err) {
+  } catch (err: any) {
     console.error('Erro ao salvar tarefa:', err)
-    alert('Erro ao salvar tarefa na nuvem. Verifique sua conexão.')
+    const detalhe = err?.message || err?.error_description || 'Erro ao salvar tarefa na nuvem. Verifique sua conexão.'
+    alert(detalhe)
   } finally {
     salvando.value = false
   }
@@ -167,6 +169,9 @@ async function configurarLembrete(notaId: string) {
     dataHora = new Date(Date.now() + minutosLembrete.value * 60 * 1000)
   } else if (dataHoraLembrete.value) {
     dataHora = new Date(dataHoraLembrete.value)
+    if (isNaN(dataHora.getTime())) {
+      dataHora = new Date(Date.now() + minutosLembrete.value * 60 * 1000)
+    }
   } else {
     dataHora = new Date(Date.now() + minutosLembrete.value * 60 * 1000)
   }
